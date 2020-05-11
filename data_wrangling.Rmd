@@ -26,7 +26,8 @@ library(knitr) # tables
 
 ``` {r data}
 # local paths to two files
-counties <- read.csv(file = "../COVID-19_US_County-level_Summaries-master/data/counties.csv") %>%
+counties <- read.csv(file =
+                       "../COVID-19_US_County-level_Summaries-master/data/counties.csv") %>%
   as.data.frame()
   
 deaths_timeseries <- read.csv(file =
@@ -80,7 +81,7 @@ for (i in 1:ncol(dat))
 }
 ```
 
-Of the `dim(dat)[1] * dim(dat)[2]` = `r dim(dat)[1] * dim(dat)[2]` datapoints, `r total_NA` of them are NA, which is about `r round(100*total_NA/(dim(dat)[1]*dim(dat)[2]), 1)`% of the data.
+Of the `dim(dat)[1] * dim(dat)[2]` = `r dim(dat)[1] * dim(dat)[2]` data points, `r total_NA` of them are NA, which is about `r round(100*total_NA/(dim(dat)[1]*dim(dat)[2]), 1)`% of the data.
 
 Next, we made a list of the features and how many times a NA value shows up.
 
@@ -145,6 +146,158 @@ ggplot(data = NAs, aes(x = reorder(Feature, -NA.val), y = NA.val, fill = Categor
                     y = "NA count")
 ```
 
-We see very clearly that there are a decent amount of features that contain missing values at a constant level (2386 and 429). There are demographic features ms
+We see very clearly that there are a decent amount of features that contain missing values at a constant level (2386 and 429). These two categories, as we see, are "Demographic" and "Climate" features. We can look somewhat further:
+
+
+``` {r NA_details}
+# lot all demographic features
+ggplot(data = NAs[NAs$Category=="Demographic",], aes(x = reorder(Feature, -NA.val), y = NA.val)) + 
+  geom_col() + labs(title = "Demographic features", x = "Features", y = "NA Count")
+```
+
+It looks like some features are left, so some demographic data is left. This happens to be age data, as shown below:
+
+``` {r demographic_NAs}
+NAs[NAs$NA.val < 2000 & NAs$Category=="Demographic",]$Feature
+# Features that don't have ~ 2000 NA values (ones we will keep)
+```
+
+We can do the same process for looking at the missing data for Climate-related features:
+
+``` {r cliamte_NAs}
+# # of climate features missing
+ggplot(data = NAs[NAs$Category=="Climate",], aes(x = reorder(Feature, -NA.val), y = NA.val)) + 
+  geom_col()  + labs(title = "Climate features", x = "Features", y = "NA Count")
+```
+
+All climate features has lots of missing data (429). We will not keep any cliamate features because of this.
+
+We can use a cutoff of 400 for features to be thrown away initially.
+
+``` {r features_gone}
+# Delete features w/ large # of NA values (> 400)
+features_to_be_gone <- filter(NAs, NA.val > 400)$Feature %>% # Feature names with 400 > missing values
+  as.vector() # turn to string
+
+# Revise NAs to exclude columns w/ large # of NA valeus
+NAs <- NAs[-which(NAs$Feature %in% features_to_be_gone),]
+
+# Plot agian
+ggplot(data = NAs, aes(x = reorder(Feature, -NA.val), y = NA.val, fill = Category)) + 
+  geom_col() + labs(title = "Count of NA values per feature",
+                    x = "Feature",
+                    y = "NA count")
+```
+
+The next cutoff is around 100. We see visually that all of these are healthcare features with the exception of one, transit. We will get rid of all of these, since there are plenty more healthcare features with not as many misisng values. For Transit, the missing values vary significantly from county to county, so imputation would be difficult. For this reason we will not use this feature.
+
+``` {r}
+# Delete more features w/ # of NA values > 100
+features_to_be_gone <- filter(NAs, NA.val > 100)$Feature %>% # Feature names with 100 > missing values
+  as.vector() # turn to string
+
+# Again revise NAs to exclude columns w/ large # of NA valeus (>100)
+NAs <- NAs[-which(NAs$Feature %in% features_to_be_gone),]
+
+# Plot agian
+ggplot(data = NAs, aes(x = reorder(Feature, -NA.val), y = NA.val, fill = Category)) + 
+  geom_col() + labs(title = "Count of NA values per feature",
+                    x = "Feature",
+                    y = "NA count")
+```
+
+We have now reduced the number of features from `r dim(dat)[2] - 1` to `r nrow(NAs) - 1` purely through eliminating features with large amounts of NA values.
+
+### Updating data
+
+Now we want to update the features in our main dataframe (dat).
+
+``` {r}
+# vector of feature names to keep
+features_to_keep <- NAs$Feature %>%
+  as.vector()
+# take only columns that are in features_to_keep
+dat <- dat[,which(colnames(dat) %in% features_to_keep)]
+```
+
+## Removing observations with NA values
+Now that we have removed features, we can look to remove certain rows from the dataset that have NA values, since the features left don't contain a ton of rows with NA values.
+
+
+First, we want to see how many total rows contain at least 1 NA value. We also make a table of states and how many of the rows (counties) belong to a certain state.
+
+``` {r}
+# Want to know and visualize how many rows (counties) have NA values
+dat$has_NA <- apply(dat, 1, function(x) anyNA(x))
+
+# Total # of rows w/ NA value
+sum(dat$has_NA)
+
+# Distribution of counties/states that have missing rows
+table(dat[dat$has_NA==TRUE, "State"])
+```
+
+91 rows have missing features, which is not many compared the # of rows/counties we have (`r nrow(dat)`). A ton of them come from Puerto Rico, which we can take out of the dataset since there are lots of columns that are missing for these observations. This leaves `r 91-78` values which we can explore a little bit.
+
+
+Let's visualize the populations to see if removing them would impact the results:
+``` {r}
+# Removing 78 observations based on missing data
+dat <- filter(dat, State != "PR")
+
+# 13 more counties with missing data
+NA_rows_remaining <- filter(dat, has_NA==TRUE) 
+
+# Plot the populations to see how influential it will be if deleted
+ggplot(NA_rows_remaining, aes(x=Area_Name, y=POP_ESTIMATE_2018)) + 
+  geom_col() + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + 
+  labs(title = "Populations of counties with missing data",
+       x = "County",
+       y = "Population estimate (2018)")
+```
+
+The only very populous counties are all of Delaware's counties (New Castle County, Sussex County, and Kent County), and Doña Ana County (NM).
+
+Doña Ana County has lots of missing features so we delete it. As for the other three counties, we can see how many features they are missing.
+
+``` {r}
+NA_rows_remaining <- filter(NA_rows_remaining, Area_Name %in% c("New Castle County",
+                                                                "Sussex County",
+                                                                "Kent County")==TRUE)
+
+
+# drop all rows (13) with NA value
+dat <- dat[-which(dat$has_NA==TRUE),]
+# Join the 3 DE counties
+dat <- rbind(dat, NA_rows_remaining)
+
+# Check how many NA values there are 
+which_NAs <- vector("list", ncol(dat)) # Pre allocate
+which_NAs <- apply(X = dat, MARGIN = 2, is.na) %>%
+  apply(MARGIN = 2, sum)
+
+sum(which_NAs) # 3 NA values, so there is only 1 column with missing data for the 3 observations of delaware.
+```
+
+There is only 1 column with missing data for the 3 observations of Delaware. This variable happens to be `Neurological.Surgery..AAMC.`, which we will drop because it varies significantly from area to area. 
+
+Additionally, we can drop `has_NA` since these are the last NA values in the dataset.
+
+``` {r}
+dat <- dat[-which(colnames(dat) %in% c("Neurological.Surgery..AAMC.", "has_NA"))]
+```
+
+We can do a final check to make sure that there are still no NA values in the dataset.
+
+``` {r}
+# Check to see if we have any NA values left
+anyNA(dat)
+```
+
+We are done cleaning out NA values, so we export it as a new CSV.
+``` {r}
+write.csv(dat, "./COVID_data.csv", row.names = FALSE)
+```
 
 
