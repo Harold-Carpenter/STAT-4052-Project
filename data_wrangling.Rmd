@@ -1,0 +1,38 @@
+---
+title: "Data Wrangling"
+author: "Will Lawson"
+date: "5/11/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Packages
+
+I imported the collection of `tidyverse` packages which contains multiple packages used for data wrangling and cleaning.
+
+``` {r packages}
+library(tidyverse) 
+```
+
+
+## Raw data
+
+**counties.csv** - contains features at the county level
+**deaths_timeseries.scv** - timeseries data of deaths at the county level (1/22 to 4/27)
+
+``` {r data}
+# local paths to two files
+counties <- read.csv(file = "../COVID-19_US_County-level_Summaries-master/data/counties.csv") %>%
+  as.data.frame()
+  
+deaths_timeseries <- read.csv(file = "../COVID-19_US_County-level_Summaries-master/data/deaths_timeseries.csv") %>%
+  as.data.frame()
+```
+
+
+
+
+
