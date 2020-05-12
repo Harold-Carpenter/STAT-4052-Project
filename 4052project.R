@@ -4,12 +4,15 @@ raw = covid[,4:218] #Data without County Names
 library(mlbench)
 library(caret)
 
+#Determining feature importance
 control = trainControl(method = "repeatedcv", number = 10, repeats = 3)
-model = train(deaths~., data = raw, method = "bridge", trControl = control) #Bayesian Ridge Regression to determine variable importance
+model = train(deaths~., data = raw, method = "bridge", trControl = control) #Use Bayesian Ridge Regression to determine variable importance
 importance = varImp(model, scale = F)
 print(importance)
+
+#Create reduced dataset with only the most important features
 important = raw[c("Density.per.square.mile.of.land.area...Housing.units", "Density.per.square.mile.of.land.area...Population", "HBAC_FEMALE", "HBA_MALE", "HBAC_MALE", "HBA_FEMALE", "GQ_ESTIMATES_2018", "Bachelor.s.degree.or.higher.2014.18","Oncology..Cancer..specialists..2019.","Total.physician.assistants..2019.","ICU.Beds","Endocrinology.Diabetes.and.Metabolism.specialists..2019.", "Psychiatry.specialists..2019.","Internal.Medicine.Primary.Care..2019.", "Cardiovascular.Disease..AAMC.", "Cardiology.specialists..2019.", "Psychiatry..AAMC.", "Hematology...Oncology..AAMC.", "HIAC_FEMALE", "Total.Specialist.Physicians..2019.","deaths")]
-View(important) #dataset with only the most important features
+View(important) 
 
 
 library(randomForest)
